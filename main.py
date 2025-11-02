@@ -22,7 +22,10 @@ app = FastAPI(
 # --- Add CORS middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://jurafuchs-chatbot-rag-1.onrender.com", 
+        "http://127.0.0.1",
+        "http://localhost"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
