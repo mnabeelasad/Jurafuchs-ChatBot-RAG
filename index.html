@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jurafuchs Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        #chat-container::-webkit-scrollbar { width: 6px; }
+        #chat-container::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        .chat-bubble { max-width: 70%; padding: 10px 16px; border-radius: 20px; word-wrap: break-word; }
+        .user-bubble { background-color: #3b82f6; color: white; }
+        .bot-bubble { background-color: #4b5563; color: #f3f4f6; }
+        .sources { font-size: 0.75rem; color: #9ca3af; margin-top: 8px; border-top: 1px solid #6b7280; padding-top: 6px; }
+        .spinner { border: 2px solid #f3f4f6; border-top: 2px solid #3b82f6; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .bot-bubble .prose { color: #f3f4f6; }
+        .bot-bubble .prose strong { color: #ffffff; }
+        .bot-bubble .prose ul { list-style-type: disc; margin-left: 1.5rem; }
+        .bot-bubble .prose p { margin: 0; }
+        
+        .speaker-btn {
+            background: none; border: none; cursor: pointer;
+            color: #9ca3af; /* gray-400 */
+            display: inline-block;
+            padding: 4px; /* Give it a little space */
+        }
+        .speaker-btn:hover { color: #ffffff; }
+        
+        .mic-listening { animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 flex items-center justify-center min-h-screen">
+    <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl h-[80vh] flex flex-col">
+        <div class="border-b border-gray-700 p-4">
+            <h1 class="text-2xl font-semibold text-white">Jurafuchs RAG Chatbot</h1>
+            <p class="text-sm text-gray-400">Powered by FastAPI & Azure AI</p>
+        </div>
+
+        <div class="border-b border-gray-700 p-4">
+            <form id="upload-form" class="flex items-center space-x-3">
+                <input type="file" id="file-input" accept=".pdf" required class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"/>
+                <button type="submit" id="upload-button" class="bg-green-600 text-white rounded-full p-3 h-10 flex items-center justify-center hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm font-medium">Upload</button>
+            </form>
+            <div id="upload-status" class="text-sm text-gray-400 pt-2 h-5"></div>
+        </div>
+
+        <div id="chat-container" class="flex-1 p-6 flex flex-col space-y-4 overflow-y-auto">
+            <div class="flex justify-start">
+                <div class="chat-bubble bot-bubble">
+                    <p>Hello! Please upload a PDF document to begin.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="border-t border-gray-700 p-4 bg-gray-900">
+            <form id="chat-form" class="flex items-center space-x-3">
+                <button type="button" id="mic-button" class="bg-gray-700 text-white rounded-full p-3 h-12 w-12 flex-shrink-0 flex items-center justify-center hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                </button>
+                <input type="text" id="message-input" placeholder="Ask a question..." autocomplete="off" class="flex-1 p-3 border border-gray-700 bg-gray-800 text-white rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" disabled/>
+                <button type="submit" id="send-button" class="bg-blue-500 text-white rounded-full p-3 h-12 w-12 flex-shrink-0 flex items-center justify-center hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+            </form>
+            <div id="chat-status" class="text-sm text-gray-500 pt-2 h-5"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- All variables and listeners (Unchanged) ---
+        const uploadForm = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file-input');
+        const uploadButton = document.getElementById('upload-button');
+        const uploadStatus = document.getElementById('upload-status');
+        const chatForm = document.getElementById('chat-form');
+        const messageInput = document.getElementById('message-input');
+        const chatContainer = document.getElementById('chat-container');
+        const sendButton = document.getElementById('send-button');
+        const chatStatus = document.getElementById('chat-status');
+        const micButton = document.getElementById('mic-button');
+        const uploadApiUrl = 'https://jurafuchs-backend.onrender.com/upload';
+        const chatApiUrl = 'https://jurafuchs-backend.onrender.com/chat';
+        let currentIndexName = null;
+        let isListening = false;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+            recognition.onstart = () => { isListening = true; micButton.classList.add('mic-listening', 'bg-blue-600'); chatStatus.textContent = 'Listening...'; };
+            recognition.onend = () => { isListening = false; micButton.classList.remove('mic-listening', 'bg-blue-600'); chatStatus.textContent = ''; };
+            recognition.onresult = (event) => { messageInput.value = event.results[0][0].transcript; chatForm.dispatchEvent(new Event('submit')); };
+            recognition.onerror = (event) => { chatStatus.textContent = `Speech error: ${event.error}`; };
+            micButton.addEventListener('click', () => { if (isListening) { recognition.stop(); } else { try { recognition.start(); } catch(e) { chatStatus.textContent = "Error starting mic."; } } });
+        } else {
+            micButton.style.display = 'none';
+        }
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = fileInput.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            showUploadLoading(true);
+            try {
+                const response = await fetch(uploadApiUrl, { method: 'POST', body: formData });
+                if (!response.ok) throw new Error((await response.json()).detail);
+                const data = await response.json();
+                currentIndexName = data.index_name;
+                uploadStatus.textContent = `Successfully uploaded '${file.name}'. Ready to chat!`;
+                appendMessage(`Success! You can now ask me questions about '${file.name}'.`, 'bot');
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                micButton.disabled = false;
+                messageInput.placeholder = `Ask about ${file.name}...`;
+            } catch (error) {
+                uploadStatus.textContent = `Error: ${error.message}`;
+                appendMessage(`Error: ${error.message}`, 'bot');
+            } finally {
+                showUploadLoading(false);
+            }
+        });
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = messageInput.value.trim();
+            if (!query || !currentIndexName) return;
+            appendMessage(query, 'user');
+            messageInput.value = '';
+            showChatLoading(true);
+            window.speechSynthesis.cancel();
+            try {
+                const response = await fetch(chatApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, index_name: currentIndexName })
+                });
+                if (!response.ok) throw new Error((await response.json()).detail);
+                const data = await response.json();
+                appendMessage(data.answer, 'bot', data.sources);
+            } catch (error) {
+                appendMessage(`Error: ${error.message}`, 'bot');
+            } finally {
+                showChatLoading(false);
+            }
+        });
+
+        // --- START OF MODIFIED FUNCTION ---
+        function appendMessage(text, sender, sources = []) {
+            const wrapper = document.createElement('div');
+            wrapper.classList.add('flex', sender === 'user' ? 'justify-end' : 'justify-start');
+            
+            const bubble = document.createElement('div');
+            bubble.classList.add('chat-bubble', sender === 'user' ? 'user-bubble' : 'bot-bubble');
+            
+            // 1. Add the message text (Markdown)
+            const messageText = document.createElement('div');
+            messageText.classList.add('prose', 'prose-sm');
+            if(sender === 'bot') {
+                messageText.classList.add('text-white');
+            }
+            messageText.innerHTML = marked.parse(text);
+            bubble.appendChild(messageText); // Append text directly to bubble
+
+            // 2. Add the speaker button (if bot)
+            if (sender === 'bot') {
+                // Create a wrapper to right-align the button
+                const speechButtonWrapper = document.createElement('div');
+                speechButtonWrapper.classList.add('flex', 'justify-end', 'mt-2'); // mt-2 adds a little space
+
+                const speechButton = document.createElement('button');
+                speechButton.classList.add('speaker-btn');
+                // Make the SVG slightly larger (width/height 18)
+                speechButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>';
+                
+                speechButton.onclick = () => {
+                    if (window.speechSynthesis.speaking) {
+                        window.speechSynthesis.cancel();
+                    } else {
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        window.speechSynthesis.speak(utterance);
+                    }
+                };
+                
+                speechButtonWrapper.appendChild(speechButton);
+                bubble.appendChild(speechButtonWrapper); // Append button wrapper *after* text
+            }
+
+            // 3. Add the sources (if they exist)
+            if (sources.length > 0) {
+                const sourcesText = document.createElement('p');
+                sourcesText.classList.add('sources');
+                sourcesText.textContent = 'Sources: ' + sources.join(', ');
+                bubble.appendChild(sourcesText); // Append sources *after* text/button
+            }
+            
+            wrapper.appendChild(bubble);
+            chatContainer.appendChild(wrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        // --- END OF MODIFIED FUNCTION ---
+
+        function showUploadLoading(isLoading) {
+            if (isLoading) {
+                uploadStatus.textContent = 'Uploading and processing file... This may take a minute.';
+                uploadButton.disabled = true;
+                uploadButton.innerHTML = '<div class="spinner"></div>';
+            } else {
+                uploadButton.disabled = false;
+                uploadButton.innerHTML = 'Upload';
+            }
+        }
+
+        function showChatLoading(isLoading) {
+            if (isLoading) {
+                chatStatus.textContent = 'Thinking...';
+                sendButton.disabled = true;
+                sendButton.classList.add('opacity-50');
+            } else {
+                chatStatus.textContent = '';
+                sendButton.disabled = false;
+                sendButton.classList.remove('opacity-50');
+            }
+        }
+    </script>
+</body>
+</html>

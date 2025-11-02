@@ -1,0 +1,11 @@
+.venv
+venv/
+
+# Secret keys
+.env
+
+# Temporary upload folder
+data/
+
+# Python cache
+__pycache__/
