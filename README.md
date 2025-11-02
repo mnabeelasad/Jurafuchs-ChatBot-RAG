@@ -6,7 +6,8 @@ The backend is built with **FastAPI** and connects to **Azure OpenAI** and **Azu
 
 ## 📸 App Screenshot
 
-![App Screenshot](<img width="808" height="904" alt="image" src="https://github.com/user-attachments/assets/081fce18-624e-4b56-8485-d727f303801a" />)
+<img width="808" height="904" alt="image" src="https://github.com/user-attachments/assets/63d11322-a319-49f1-86f9-9077ef475f6e" />
+
 *(Note: You'll need to drag your screenshot file into the same directory as your README.md for this to show up on GitHub)*
 
 ---
